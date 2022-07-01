@@ -39,98 +39,83 @@ app.route('/split-payments/compute')
         // GET SPLIT INFO FROM PAYLOAD
         const splitInfo = payload.SplitInfo;
 
-        //CONSTRAINT 1, CHECK IF SPLIT INFO IS WITHING 1 AND 20 SPLIT ENTITIES
-        if (splitInfo.length > 0 && splitInfo.length <= 20) {
+        // filter out the FLAT split type from splitInfo and store in its array
+        var flatInfo = splitInfo.filter((entry) => {
+            return entry.SplitType == "FLAT";
+        });
 
-            // filter out the FLAT split type from splitInfo and store in its array
-            var flatInfo = splitInfo.filter((entry) => {
-                return entry.SplitType == "FLAT";
-            });
+        // filter out the PERCENTAGE split type from splitInfo and store in its array
+        var percentageInfo = splitInfo.filter((entry) => {
+            return entry.SplitType == "PERCENTAGE";
+        });
 
-            // filter out the PERCENTAGE split type from splitInfo and store in its array
-            var percentageInfo = splitInfo.filter((entry) => {
-                return entry.SplitType == "PERCENTAGE";
-            });
+        // filter out the RATIO split type from splitInfo and store in its array
+        var ratioInfo = splitInfo.filter((entry) => {
+            return entry.SplitType == "RATIO";
+        });
 
-            // filter out the RATIO split type from splitInfo and store in its array
-            var ratioInfo = splitInfo.filter((entry) => {
-                return entry.SplitType == "RATIO";
-            });
+        // Loop through the entries with FLAT Split type first
+        flatInfo.forEach((entry) => {
 
-            // Loop through the entries with FLAT Split type first
-            flatInfo.forEach((entry) => {
-                
-                //CONSTRAINT 3 MAKE SURE SPLIT AMOUNT VALUE FOR EACH ENTITY 
-                //IS NOT GREATER THAN TRANSACTION AMOUNT and CONSTRAINT 4, SPLIT 
-                //AMOUNT FOR EACH ENTITY CANNOT BE LESSER THAN ZERO
-                if (entry.SplitValue < payload.Amount && entry.SplitValue>=0) {
-                    // Deduct the amount from the balance
-                    response.Balance -= entry.SplitValue
-                    //Update the split breakdown
-                    response.SplitBreakdown.push({
-                        SplitEntityId: entry.SplitEntityId,
-                        Amount: entry.SplitValue
-                    })
-                }
+            // Deduct the amount from the balance
+            response.Balance -= entry.SplitValue
+            //Update the split breakdown
+            response.SplitBreakdown.push({
+                SplitEntityId: entry.SplitEntityId,
+                Amount: entry.SplitValue
             })
 
-            // Loop through the entries with PERCENTAGE Split type second
-            percentageInfo.forEach((entry) => {                
-                //CONSTRAINT 4, SPLIT AMOUNT FOR EACH ENTITY CANNOT BE LESSER THAN ZERO
-                if (entry.SplitValue>=0) {
-                    //get percentage value
-                    var percentageValue = (entry.SplitValue / 100) * response.Balance;
-                    // Deduct the amount from the balance
-                    response.Balance -= percentageValue;
-                    //Update the split breakdown
-                    response.SplitBreakdown.push({
-                        SplitEntityId: entry.SplitEntityId,
-                        Amount: percentageValue
-                    })
-                }
+        })
+
+        // Loop through the entries with PERCENTAGE Split type second
+        percentageInfo.forEach((entry) => {
+
+            //get percentage value
+            var percentageValue = (entry.SplitValue / 100) * response.Balance;
+            // Deduct the amount from the balance
+            response.Balance -= percentageValue;
+            //Update the split breakdown
+            response.SplitBreakdown.push({
+                SplitEntityId: entry.SplitEntityId,
+                Amount: percentageValue
             })
 
-            //USE Remaining balance to handle the ratios
+        })
 
-            var totalRatio = 0; //Stores the total ratio
+        //USE Remaining balance to handle the ratios
 
-            var ratioValue = 0; //Stores the total amount of entries with ratio split type
+        var totalRatio = 0; //Stores the total ratio
 
-            //Calculate total ratio
-            ratioInfo.forEach((entry) => {
-                //CONSTRAINT 4, SPLIT AMOUNT FOR EACH ENTITY CANNOT BE LESSER THAN ZERO
-                if (entry.SplitValue>=0) {
-                    totalRatio += entry.SplitValue
-                }
+        var ratioValue = 0; //Stores the total amount of entries with ratio split type
+
+        //Calculate total ratio
+        ratioInfo.forEach((entry) => {
+
+            totalRatio += entry.SplitValue
+
+        })
+
+        ratioInfo.forEach((entry) => {
+
+            //store entry value
+            var value = (entry.SplitValue / totalRatio) * response.Balance;
+            // update total ratio value
+            ratioValue += value;
+            //Update the split breakdown
+            response.SplitBreakdown.push({
+                SplitEntityId: entry.SplitEntityId,
+                Amount: value
             })
 
-            ratioInfo.forEach((entry) => {
-                //CONSTRAINT 4, SPLIT AMOUNT FOR EACH ENTITY CANNOT BE LESSER THAN ZERO
-                if (entry.SplitValue>=0) {
-                    //store entry value
-                    var value = (entry.SplitValue / totalRatio) * response.Balance;
-                    // update total ratio value
-                    ratioValue += value;
-                    //Update the split breakdown
-                    response.SplitBreakdown.push({
-                        SplitEntityId: entry.SplitEntityId,
-                        Amount: value
-                    })
-                }
-            })
+        })
 
-            //Update balance finally after doing all ratios
-            response.Balance -= ratioValue
+        //Update balance finally after doing all ratios
+        response.Balance -= ratioValue
 
 
 
-            res.send(response)
-        } else {
-            res.send({
-                error: true,
-                message: "Split Info array is not within boundary!"
-            })
-        }
+        res.send(response)
+
     });
 
 app.listen(port, () => {
